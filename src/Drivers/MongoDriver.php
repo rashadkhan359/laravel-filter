@@ -2,21 +2,27 @@
 
 namespace RashadKhan\LaravelFilter\Drivers;
 
-use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 use Jenssegers\Mongodb\Eloquent\Builder;
+use RashadKhan\LaravelFilter\Adapters\MongoSchemaAdapter;
+use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
 class MongoDriver extends AbstractDriver implements FilterDriverInterface
 {
+    public function __construct()
+    {
+        $this->adapter = new MongoSchemaAdapter;
+    }
     /**
      * Apply a where condition to the query.
      *
      * @param Builder $query
+     * @param string $fieldType
      * @param string $field
      * @param string $operator
      * @param mixed $value
      * @return Builder
      */
-    public function applyWhere($query, string $field, string $operator, $value)
+    public function applyWhere($query, $fieldType, string $field, string $operator, $value)
     {
         switch ($operator) {
             case 'eq':
@@ -103,5 +109,33 @@ class MongoDriver extends AbstractDriver implements FilterDriverInterface
     public function applyPagination($query, int $perPage, int $page)
     {
         return $query->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    /**
+     * Map database column types to appropriate operators for MongoDB.
+     *
+     * @param string $columnType
+     * @return array
+     */
+    public function mapColumnTypeToOperators(string $columnType): array
+    {
+        // MongoDB-specific mappings
+        $mongoTypeMap = [
+            'int' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'between'],
+            'long' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'between'],
+            'double' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'between'],
+            'string' => ['eq', 'neq', 'regex'],
+            'objectId' => ['eq', 'neq', 'in'],
+            'bool' => ['eq'],
+            'date' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
+            'array' => ['eq', 'in', 'size', 'exists'],
+            'object' => ['exists'],
+        ];
+
+        // Merge with parent mappings and return
+        $baseTypeMap = parent::mapColumnTypeToOperators($columnType);
+        $mergedTypeMap = array_merge($baseTypeMap, $mongoTypeMap);
+
+        return $mergedTypeMap[$columnType] ?? $mergedTypeMap['default'] ?? ['eq', 'neq'];
     }
 }

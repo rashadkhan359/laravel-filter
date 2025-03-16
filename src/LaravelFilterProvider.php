@@ -3,11 +3,11 @@
 namespace RashadKhan\LaravelFilter;
 
 use Illuminate\Support\ServiceProvider;
-use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
-use RashadKhan\LaravelFilter\Drivers\EloquentDriver;
 use RashadKhan\LaravelFilter\Drivers\MongoDriver;
+use RashadKhan\LaravelFilter\Drivers\EloquentDriver;
+use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
-class QueryFilterServiceProvider extends ServiceProvider
+class LaravelFilterProvider extends ServiceProvider
 {
     /**
      * Register services.

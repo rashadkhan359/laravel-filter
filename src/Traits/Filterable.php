@@ -3,8 +3,6 @@
 namespace RashadKhan\LaravelFilter\Traits;
 
 use Illuminate\Database\Eloquent\Builder;
-use RashadKhan\LaravelFilter\Contracts\FilterServiceInterface;
-use RashadKhan\LaravelFilter\FilterManager;
 
 trait Filterable
 {

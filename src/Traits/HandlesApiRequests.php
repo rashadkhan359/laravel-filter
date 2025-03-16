@@ -17,7 +17,7 @@ trait HandlesApiRequests
      * @param string|null $resourceClass
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function filteredIndex(Request $request, string $modelClass, string $resourceClass = null)
+    protected function filteredIndex(Request $request, string $modelClass, ?string $resourceClass = null)
     {
         // Create a new instance of the model
         $model = new $modelClass();

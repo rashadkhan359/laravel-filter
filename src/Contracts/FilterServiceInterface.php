@@ -2,8 +2,6 @@
 
 namespace RashadKhan\LaravelFilter\Contracts;
 
-use Illuminate\Database\Eloquent\Builder;
-
 interface FilterServiceInterface
 {
     /**

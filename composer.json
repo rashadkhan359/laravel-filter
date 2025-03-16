@@ -1,6 +1,7 @@
 {
-    "name": "rashadkhan/laravel-filter",
+    "name": "rashadkhan359/laravel-filter",
     "description": "A modern and advanced package to filter models in laravel.",
+    "type": "library",
     "autoload": {
         "psr-4": {
             "RashadKhan\\LaravelFilter\\": "src/"
@@ -12,7 +13,13 @@
             "email": "rashadkhan359@gmail.com"
         }
     ],
-    "require": {},
+    "require": {
+        "php": "^8.0",
+        "laravel/framework": "^11.0|^10.0|^9.0|^8.0|^12.0"
+    },
+    "require-dev": {
+        "mongodb/laravel-mongodb": "^4.2"
+    },
     "keywords": [
         "php",
         "github",
@@ -30,5 +37,13 @@
         "laravel 12"
     ],
     "license": "MIT",
-    "minimum-stability": "stable"
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "laravel": {
+            "providers": [
+                "RashadKhan\\LaravelFilter\\LaravelFilterProvider"
+            ]
+        }
+    }
 }

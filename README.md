@@ -16,7 +16,7 @@ A powerful, flexible, and database-agnostic query filtering package for Laravel 
 ## Installation
 
 ```bash
-composer require rashadkhan/laravel-filter
+composer require RashadKhan/laravel-filter
 ```
 
 Publish the configuration:
@@ -146,7 +146,7 @@ We welcome contributions to Laravel Filter! 🎉
 1. **Fork the Repository**: Click the "Fork" button at the top-right of the repository.
 2. **Clone Your Fork**:
    ```bash
-   git clone https://github.com/rashadkhan359/laravel-filter.git
+   git clone https://github.com/RashadKhan/laravel-filter.git
    cd laravel-filter
    ```
 3. **Create a New Branch**:
@@ -178,7 +178,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 
 ## Reporting Issues
 
-- If you find a bug, [open an issue](https://github.com/rashadkhan359/laravel-filter/issues) with a detailed description.
+- If you find a bug, [open an issue](https://github.com/RashadKhan/laravel-filter/issues) with a detailed description.
 - Suggest improvements by opening a feature request issue.
 
 ---
@@ -189,7 +189,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 
 If you discover a security vulnerability in Laravel Filter, please report it confidentially.
 
-- **Email:** rashadkhan359@gmail.com
+- **Email:** RashadKhan@gmail.com
 - **GitHub Issues:** Do NOT use issues for security reports.
 
 We will acknowledge your report within 48 hours and work on a fix promptly.
@@ -219,7 +219,7 @@ If you want to support the project, consider sponsoring us:
 ```
 
 ```yml
-github: rashadkhan359
+github: RashadKhan
 # patreon: yourpatreonusername
 ```
 

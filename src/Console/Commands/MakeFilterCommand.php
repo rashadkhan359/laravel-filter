@@ -2,10 +2,13 @@
 
 namespace RashadKhan\LaravelFilter\Console\Commands;
 
-use Illuminate\Console\Command;
 use Illuminate\Support\Str;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema;
+use RashadKhan\LaravelFilter\FilterManager;
+use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
 class MakeFilterCommand extends Command
 {
@@ -15,7 +18,8 @@ class MakeFilterCommand extends Command
      * @var string
      */
     protected $signature = 'make:filter {model : The model class to create a filter for}
-                           {--force : Force creation even if the filter already exists}';
+                            {--driver= : The driver to use (eloquent, mongo, etc.)}
+                            {--force : Force creation even if the filter already exists}';
 
     /**
      * The console command description.
@@ -25,12 +29,50 @@ class MakeFilterCommand extends Command
     protected $description = 'Create a new filter class for a model';
 
     /**
+     * The filter driver to use.
+     *
+     * @var FilterDriverInterface
+     */
+    protected $driver;
+    protected $filterManager;
+
+    /**
+     * Create a new command instance.
+     *
+     * @param FilterManager $filterManager
+     * @return void
+     */
+    public function __construct(FilterManager $filterManager)
+    {
+        parent::__construct();
+        $this->filterManager = $filterManager;
+    }
+
+
+    /**
      * Execute the console command.
      *
      * @return int
      */
     public function handle()
     {
+        // Determine which driver to use (from option or auto-detect)
+        $driverName = $this->option('driver');
+
+        if ($driverName) {
+            $this->driver = $this->filterManager->driver($driverName);
+            $this->info("Using driver: {$driverName}");
+        } else {
+            $this->driver = $this->filterManager->detectDriver();
+            $this->info("Auto-detected driver: " . $this->driver->getName());
+        }
+
+        // Check if adapter is available
+        if (!$this->driver->getAdapter()) {
+            $this->error("No adapter available for driver: " . $this->driver->getName());
+            return 1;
+        }
+
         $modelName = $this->argument('model');
         $modelClass = $this->qualifyModel($modelName);
 
@@ -42,7 +84,7 @@ class MakeFilterCommand extends Command
 
         // Create filter class name and path
         $filterClass = Str::studly($modelName) . 'Filter';
-        $filterNamespace = config('query-filter.filter_namespace');
+        $filterNamespace = config('laravelfilter.filter_namespace');
         $filterPath = app_path(str_replace('\\', '/', str_replace('App\\', '', $filterNamespace))) . "/{$filterClass}.php";
 
         // Check if filter already exists
@@ -54,10 +96,20 @@ class MakeFilterCommand extends Command
         // Get model fields
         $model = new $modelClass();
         $table = $model->getTable();
-        $columns = Schema::getColumnListing($table);
+        $connectionType = DB::connection()->getDriverName();
+
+        // Get columns list and their types
+        $columns = $this->driver->getAdapter()->getColumns($table);
+
+        if (empty($columns)) {
+            $this->warn("No columns found for table: {$table}");
+        }
+
+        $columnTypes = $this->getColumnTypes($table, $columns);
+
 
         // Generate filter content
-        $filterContent = $this->generateFilterContent($filterNamespace, $filterClass, $columns, $table);
+        $filterContent = $this->generateFilterContent($filterNamespace, $filterClass, $columns, $columnTypes);
 
         // Create directory if it doesn't exist
         $directory = dirname($filterPath);
@@ -72,17 +124,57 @@ class MakeFilterCommand extends Command
         return 0;
     }
 
+
+    /**
+     * Get column types for the model.
+     *
+     * @param string $table
+     * @param array $columns
+     * @return array
+     */
+    protected function getColumnTypes(string $table, array $columns): array
+    {
+        $columnTypes = [];
+        $excludeFields = config('laravelfilter.filters.exclude_fields', []);
+
+        foreach ($columns as $column) {
+            // Skip excluded fields
+            if (in_array($column, $excludeFields)) {
+                continue;
+            }
+            try {
+                $columnTypes[$column] = $this->driver->getAdapter()->getColumnType($table, $column);
+            } catch (\Exception $e) {
+                $this->warn("Could not determine type for column {$column}: " . $e->getMessage());
+                $columnTypes[$column] = 'unknown';
+            }
+        }
+
+        return $columnTypes;
+    }
+
     /**
      * Generate the filter class content.
      *
      * @param string $namespace
      * @param string $className
      * @param array $columns
+     * @param array $columnTypes
      * @return string
      */
-    protected function generateFilterContent(string $namespace, string $className, array $columns, string $table): string
+    protected function generateFilterContent(string $namespace, string $className, array $columns, array $columnTypes): string
     {
-        $allowedFilters = [];
+        $stubPath = __DIR__ . '/stubs/filter.stub';
+
+        if (!File::exists($stubPath)) {
+            $this->error("Stub file not found at {$stubPath}");
+            return '';
+        }
+
+        $stub = File::get($stubPath);
+
+        $allowedFiltersWithType = [];
+        $searchableFields = [];
 
         foreach ($columns as $column) {
             // Skip Laravel's timestamp columns for search
@@ -90,68 +182,24 @@ class MakeFilterCommand extends Command
                 $searchableFields[] = "'{$column}'";
             }
 
-            // Set allowed operators based on column type
-            $columnType = Schema::getColumnType($table, $column);
+            // Get column type and map to operators
+            $columnType = $columnTypes[$column] ?? 'unknown';
 
-            switch ($columnType) {
-                case 'integer':
-                case 'bigint':
-                case 'float':
-                case 'double':
-                case 'decimal':
-                    $operators = "['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'between']";
-                    break;
-                case 'string':
-                case 'text':
-                    $operators = "['eq', 'neq', 'like']";
-                    break;
-                case 'datetime':
-                case 'date':
-                case 'timestamp':
-                    $operators = "['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between']";
-                    break;
-                case 'boolean':
-                    $operators = "['eq']";
-                    break;
-                default:
-                    $operators = "['eq', 'neq']";
-            }
+            // Map the column type to operators using the appropriate driver
+            $operators = $this->driver->mapColumnTypeToOperators($columnType);
+            $operatorsStr = "['" . implode("', '", $operators) . "']";
 
-            $allowedFilters[] = "'{$column}' => {$operators}";
+            $allowedFiltersWithType[] = "'{$column}' => [\n            'type' => '{$columnType}',\n            'operators' => {$operatorsStr}\n        ]";
         }
 
-        $allowedFiltersStr = implode(",\n", $allowedFilters);
-        $searchableFieldsStr = implode(",\n", $searchableFields ?? []);
+        $allowedFiltersWithTypeStr = implode(",\n        ", $allowedFiltersWithType);
+        $searchableFieldsStr = implode(",\n        ", $searchableFields);
 
-        return <<<PHP
-<?php
-
-namespace {$namespace};
-
-use YourVendor\LaravelQueryFilter\FilterService;
-use Illuminate\Database\Eloquent\Builder;
-
-class {$className} extends FilterService
-{
-    /**
-     * The allowed filters with their operators.
-     *
-     * @var array
-     */
-    protected \$allowedFilters = [
-{$allowedFiltersStr}
-    ];
-
-    /**
-     * The searchable fields.
-     *
-     * @var array
-     */
-    protected \$searchableFields = [
-{$searchableFieldsStr}
-    ];
-}
-PHP;
+        return str_replace(
+            ['{{ namespace }}', '{{ class }}', '{{ allowedFilters }}', '{{ searchableFields }}'],
+            [$namespace, $className, $allowedFiltersWithTypeStr, $searchableFieldsStr],
+            $stub
+        );
     }
 
     /**
@@ -165,10 +213,6 @@ PHP;
         $model = ltrim($model, '\\/');
         $model = str_replace('/', '\\', $model);
 
-        if (Str::startsWith($model, 'App\\')) {
-            return $model;
-        }
-
-        return 'App\\Models\\' . $model;
+        return Str::startsWith($model, 'App\\') ? $model : 'App\\Models\\' . $model;
     }
 }

@@ -3,62 +3,38 @@
 namespace RashadKhan\LaravelFilter\Drivers;
 
 use Illuminate\Database\Eloquent\Builder;
+use RashadKhan\LaravelFilter\Support\FilterResolver;
 use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
 class EloquentDriver extends AbstractDriver implements FilterDriverInterface
 {
+
+    protected $filterResolver;
+
+    public function __construct()
+    {
+        $this->filterResolver = new FilterResolver;
+    }
+
     /**
      * Apply a where condition to the query.
      *
      * @param Builder $query
+     * @param string $fieldType
      * @param string $field
      * @param string $operator
      * @param mixed $value
      * @return Builder
      */
-    public function applyWhere($query, string $field, string $operator, $value)
+    public function applyWhere($query, string $fieldType, string $field, string $operator, $value)
     {
-        switch ($operator) {
-            case 'eq':
-                return $query->where($field, '=', $value);
-            case 'neq':
-                return $query->where($field, '!=', $value);
-            case 'gt':
-                return $query->where($field, '>', $value);
-            case 'gte':
-                return $query->where($field, '>=', $value);
-            case 'lt':
-                return $query->where($field, '<', $value);
-            case 'lte':
-                return $query->where($field, '<=', $value);
-            case 'like':
-                return $query->where($field, 'LIKE', "%{$value}%");
-            case 'in':
-                return $query->whereIn($field, $value);
-            case 'between':
-                return $query->whereBetween($field, $value);
-            case 'null':
-                return $query->whereNull($field);
-            case 'not_null':
-                return $query->whereNotNull($field);
-            case 'date':
-                return $query->whereDate($field, '=', $value);
-            case 'year':
-                return $query->whereYear($field, '=', $value);
-            case 'month':
-                return $query->whereMonth($field, '=', $value);
-            case 'day':
-                return $query->whereDay($field, '=', $value);
-            case 'time':
-                return $query->whereTime($field, '=', $value);
-            case 'relation':
-                list($relation, $relationField, $relationOperator, $relationValue) = $value;
-                return $query->whereHas($relation, function ($q) use ($relationField, $relationOperator, $relationValue) {
-                    $this->applyWhere($q, $relationField, $relationOperator, $relationValue);
-                });
-            default:
-                return $query;
-        }
+        return $this->getFilterClass($fieldType)
+            ->apply($query, $field, $operator, $value);
+    }
+
+    public function getFilterClass(string $fieldType)
+    {
+        return $this->filterResolver->resolveFilterForField($fieldType);
     }
 
     /**
@@ -115,4 +91,24 @@ class EloquentDriver extends AbstractDriver implements FilterDriverInterface
     {
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
+
+    /**
+     * Map database column types to appropriate operators for SQL databases.
+     *
+     * @param string $columnType
+     * @return array
+     */
+    public function mapColumnTypeToOperators(string $columnType): array
+    {
+        // Get dynamically allowed operators
+        // $availableOperators = $this->filterResolver->getFilterCases($columnType);
+
+        // // Get base mappings from the parent class
+        // $baseTypeMap = parent::mapColumnTypeToOperators($columnType);
+        // // Filter out any operators that are not supported in the system
+        // return array_values(array_intersect($baseTypeMap, $availableOperators));
+        return $this->filterResolver->getFilterCases($columnType);
+    }
+
+
 }

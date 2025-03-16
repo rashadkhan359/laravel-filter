@@ -1,0 +1,27 @@
+<?php
+
+namespace {{ namespace }};
+
+use RashadKhan\LaravelFilter\FilterService;
+use Illuminate\Database\Eloquent\Builder;
+
+class {{ class }} extends FilterService
+{
+    /**
+     * The allowed filters with their data types and operators.
+     *
+     * @var array
+     */
+    protected $allowedFilters = [
+        {{ allowedFilters }}
+    ];
+
+    /**
+     * The searchable fields.
+     *
+     * @var array
+     */
+    protected $searchableFields = [
+        {{ searchableFields }}
+    ];
+}

@@ -3,7 +3,6 @@
 namespace RashadKhan\LaravelFilter\Filters;
 
 use Illuminate\Database\Eloquent\Builder;
-use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
 class RelationshipFilter extends AbstractFilter
 {
@@ -11,39 +10,53 @@ class RelationshipFilter extends AbstractFilter
      * Apply the filter to the query.
      *
      * @param Builder $query
-     * @param string $relation
-     * @param array $conditions
-     * @param FilterDriverInterface $driver
+     * @param string $field
+     * @param string $operator
+     * @param mixed $value
      * @return Builder
      */
-    public function apply($query, string $relation, array $conditions, FilterDriverInterface $driver)
+    public function apply($query, $field, $operator, $value)
     {
-        return $query->whereHas($relation, function ($q) use ($conditions, $driver) {
-            foreach ($conditions as $condition) {
-                $driver->applyWhere(
-                    $q,
-                    $condition['field'],
-                    $condition['operator'],
-                    $condition['value']
-                );
-            }
-        });
+        if ($operator === 'relation') {
+            list($relation, $relationField, $relationOperator, $relationValue) = $value;
+            return $query->whereHas($relation, function ($q) use ($relationField, $relationOperator, $relationValue) {
+                // Get the appropriate filter for this field type
+                $filter = $this->resolveFilterForField($relationField);
+                return $filter->apply($q, $relationField, $relationOperator, $relationValue);
+            });
+        } elseif ($operator === 'relationCount') {
+            list($countOperator, $count) = $value;
+            return $query->has($field, $countOperator, $count);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Resolve the appropriate filter for a field based on its type.
+     *
+     * @param string $field
+     * @return AbstractFilter
+     */
+    protected function resolveFilterForField(string $field)
+    {
+        // This should be implemented based on your field type detection logic
+        // For now, we'll return a generic TextFilter as default
+        return new TextFilter();
     }
 
     /**
      * Define relationship filter conditions.
      *
      * @param string $relation
-     * @param array $conditions
+     * @param string $field
+     * @param string $operator
+     * @param mixed $value
      * @return array
      */
-    public static function conditions(string $relation, array $conditions): array
+    public static function withCondition(string $relation, string $field, string $operator, $value): array
     {
-        return [
-            'field' => $relation,
-            'operator' => 'relation',
-            'value' => $conditions
-        ];
+        return self::conditions($relation, 'relation', [$relation, $field, $operator, $value]);
     }
 
     /**
@@ -54,12 +67,8 @@ class RelationshipFilter extends AbstractFilter
      * @param int $count
      * @return array
      */
-    public static function count(string $relation, string $operator, int $count): array
+    public static function withCount(string $relation, string $operator, int $count): array
     {
-        return [
-            'field' => $relation,
-            'operator' => 'relationCount',
-            'value' => [$operator, $count]
-        ];
+        return self::conditions($relation, 'relationCount', [$operator, $count]);
     }
 }

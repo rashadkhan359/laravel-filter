@@ -2,6 +2,7 @@
 
 namespace RashadKhan\LaravelFilter\Filters;
 
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 
@@ -18,6 +19,12 @@ class DateFilter extends AbstractFilter
      */
     public function apply($query, $field, $operator, $value)
     {
+        $value = $this->parseDateValue($value);
+
+        if ($value === null) {
+            return $query; // Skip the filter if value is invalid
+        }
+
         switch ($operator) {
             case 'eq':
                 return $query->whereDate($field, '=', $value);
@@ -75,6 +82,95 @@ class DateFilter extends AbstractFilter
                 ]);
             default:
                 return $query->whereDate($field, '=', $value);
+        }
+    }
+
+
+    /**
+     * Parse the date value, handling various formats.
+     *
+     * @param mixed $value
+     * @return string|array|null
+     */
+    private function parseDateValue($value)
+    {
+        // Handle null values
+        if ($value === null) {
+            return null;
+        }
+
+        // Handle array values (for between, in, etc.)
+        if (is_array($value)) {
+            $result = [];
+            foreach ($value as $index => $item) {
+                $parsed = $this->parseSingleDate($item);
+                if ($parsed === null) {
+                    // For critical operations like between, we need both dates
+                    // For in/not_in, we can filter out invalid dates
+                    if (count($value) <= 2) {
+                        return null;
+                    }
+                } else {
+                    $result[] = $parsed;
+                }
+            }
+            return empty($result) ? null : $result;
+        }
+
+        // Handle single value
+        return $this->parseSingleDate($value);
+    }
+
+    /**
+     * Parse a single date value in various formats.
+     *
+     * @param mixed $value
+     * @return string|null
+     */
+    private function parseSingleDate($value)
+    {
+        // Already a Carbon instance
+        if ($value instanceof Carbon) {
+            return $value->toDateString();
+        }
+
+        // Empty values
+        if (empty($value) || $value === 'null') {
+            return null;
+        }
+
+        // Try to parse the date
+        try {
+            // Common formats to try
+            $formats = [
+                'Y-m-d',        // 2023-02-23
+                'Y-m-d H:i:s',  // 2023-02-23 14:00:00
+                'd/m/Y',        // 23/02/2023
+                'm/d/Y',        // 02/23/2023
+                'd-m-Y',        // 23-02-2023
+                'm-d-Y',        // 02-23-2023
+                'd.m.Y',        // 23.02.2023
+                'Y.m.d',        // 2023.02.23
+                'M j, Y',       // Feb 23, 2023
+                'j M Y',        // 23 Feb 2023
+                'j F Y',        // 23 February 2023
+            ];
+
+            // Try each format
+            foreach ($formats as $format) {
+                try {
+                    return Carbon::createFromFormat($format, $value)->toDateString();
+                } catch (InvalidFormatException $e) {
+                    // Continue to the next format
+                    continue;
+                }
+            }
+
+            // Last resort: try Carbon's flexible parsing
+            return Carbon::parse($value)->toDateString();
+        } catch (\Exception $e) {
+            // Any parsing error means the date is invalid
+            return null;
         }
     }
 

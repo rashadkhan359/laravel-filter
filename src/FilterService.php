@@ -2,10 +2,10 @@
 
 namespace RashadKhan\LaravelFilter;
 
-use RashadKhan\LaravelFilter\Contracts\FilterServiceInterface;
 use RashadKhan\LaravelFilter\Drivers\AbstractDriver;
-use RashadKhan\LaravelFilter\Exceptions\InvalidFilterException;
 use RashadKhan\LaravelFilter\Support\FilterCollection;
+use RashadKhan\LaravelFilter\Contracts\FilterServiceInterface;
+use RashadKhan\LaravelFilter\Exceptions\InvalidFilterException;
 
 abstract class FilterService implements FilterServiceInterface
 {
@@ -54,7 +54,8 @@ abstract class FilterService implements FilterServiceInterface
      */
     protected function resolveDefaultDriver()
     {
-        $driverClass = config('query-filter.default_driver');
+        $driver = config('laravelfilter.default_driver');
+        $driverClass = config("laravelfilter.available_drivers.{$driver}");
         return app($driverClass);
     }
 
@@ -122,11 +123,11 @@ abstract class FilterService implements FilterServiceInterface
         $filterCollection = new FilterCollection($filters);
 
         foreach ($filterCollection->getFilters() as $filter) {
-            if (!$this->isValidFilter($filter)) {
+            if (!$this->isValidFilter(filter: $filter)) {
                 throw InvalidFilterException::invalidFilter($filter['field'], $filter['operator']);
             }
-
-            $query = $this->driver->applyWhere($query, $filter['field'], $filter['operator'], $filter['value']);
+            $fieldType = $this->allowedFilters[$filter['field']]['type'];
+            $this->driver->applyWhere($query, $fieldType, $filter['field'], $filter['operator'], $filter['value']);
         }
 
         return $query;
@@ -140,8 +141,8 @@ abstract class FilterService implements FilterServiceInterface
      */
     protected function isValidFilter(array $filter): bool
     {
-        return isset($this->allowedFilters[$filter['field']]) &&
-            in_array($filter['operator'], $this->allowedFilters[$filter['field']]);
+        return isset($this->allowedFilters[$filter['field']]['operators']) &&
+            in_array($filter['operator'], $this->allowedFilters[$filter['field']]['operators']);
     }
 
     /**

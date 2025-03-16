@@ -28,6 +28,48 @@ return [
     ],
 
     /*
+   |--------------------------------------------------------------------------
+   | Driver Adapters
+   |--------------------------------------------------------------------------
+   |
+   | This array maps driver names to their respective adapter classes. These
+   | adapters are responsible for interacting with the database schema.
+   |
+   */
+
+    'driver_adapters' => [
+        'eloquent' => RashadKhan\LaravelFilter\Adapters\EloquentSchemaAdapter::class,
+        'mongo' => RashadKhan\LaravelFilter\Adapters\MongoSchemaAdapter::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Connection to Driver Mapping
+    |--------------------------------------------------------------------------
+    |
+    | This mapping is used when auto-detecting the appropriate driver based on
+    | the current database connection.
+    |
+    */
+    'connection_driver_map' => [
+        'mysql' => 'eloquent',
+        'sqlite' => 'eloquent',
+        'pgsql' => 'eloquent',
+        'sqlsrv' => 'eloquent',
+        'mongodb' => 'mongo',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fallback Adapter
+    |--------------------------------------------------------------------------
+    |
+    | If a specific adapter is not found for a driver, this adapter will be used.
+    |
+    */
+    'fallback_adapter' => RashadKhan\LaravelFilter\Adapters\EloquentSchemaAdapter::class,
+
+    /*
     |--------------------------------------------------------------------------
     | Default Filter Namespace
     |--------------------------------------------------------------------------
@@ -115,4 +157,19 @@ return [
     |
     */
     'auto_discover' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generated Filter Settings
+    |--------------------------------------------------------------------------
+    |
+    | These options control aspects of the generated filter classes.
+    |
+    */
+    'filters' => [
+        // Fields to exclude when generating filters
+        'exclude_fields' => [
+            'password', 'remember_token', 'api_token'
+        ],
+    ],
 ];
