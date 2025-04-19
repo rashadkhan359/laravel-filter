@@ -9,13 +9,17 @@ trait Filterable
     /**
      * Apply filters to the model's query.
      *
-     * @param array $filterParams
      * @param Builder|null $query
-     * @return mixed
+     * @param array|null $filterParams
+     * @return Builder
      */
-    public function filter(array $filterParams, $query = null)
+    public function scopeFilter(Builder $query, ?array $filterParams = null)
     {
-        $query = $query ?? $this->newQuery();
+        // If no filter parameters provided, return unmodified query
+        if ($filterParams === null) {
+            return $query;
+        }
+
         $filterClass = $this->getFilterServiceClass();
 
         // Create filter service instance
@@ -24,6 +28,7 @@ trait Filterable
         // Apply filters and return result
         return $filterService->apply($query, $filterParams);
     }
+
 
     /**
      * Get filter service class for this model.
@@ -51,8 +56,9 @@ trait Filterable
      */
     public function scopeWithFilters(Builder $query, array $filterParams)
     {
-        return $this->filter($filterParams, $query);
+        return $this->scopeFilter($query, $filterParams);
     }
+
 
     /**
      * Get the available filters for this model.

@@ -2,9 +2,9 @@
 
 namespace RashadKhan\LaravelFilter\Filters;
 
-use Carbon\Exceptions\InvalidFormatException;
-use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Carbon\Exceptions\InvalidFormatException;
 
 class DateFilter extends AbstractFilter
 {
@@ -19,33 +19,33 @@ class DateFilter extends AbstractFilter
      */
     public function apply($query, $field, $operator, $value)
     {
-        $value = $this->parseDateValue($value);
-
-        if ($value === null) {
+        $parsedValue = $this->parseDateValue($operator, $value);
+        
+        if (!$parsedValue) {
             return $query; // Skip the filter if value is invalid
         }
 
         switch ($operator) {
             case 'eq':
-                return $query->whereDate($field, '=', $value);
+                return $query->whereDate($field, '=', $parsedValue);
             case 'neq':
-                return $query->whereDate($field, '<>', $value);
+                return $query->whereDate($field, '<>', $parsedValue);
             case 'gt':
-                return $query->whereDate($field, '>', $value);
+                return $query->whereDate($field, '>', $parsedValue);
             case 'gte':
-                return $query->whereDate($field, '>=', $value);
+                return $query->whereDate($field, '>=', $parsedValue);
             case 'lt':
-                return $query->whereDate($field, '<', $value);
+                return $query->whereDate($field, '<', $parsedValue);
             case 'lte':
-                return $query->whereDate($field, '<=', $value);
+                return $query->whereDate($field, '<=', $parsedValue);
             case 'between':
-                return $query->whereBetween($field, $value);
+                return $query->whereBetween($field, $parsedValue);
             case 'not_between':
-                return $query->whereNotBetween($field, $value);
+                return $query->whereNotBetween($field, $parsedValue);
             case 'in':
-                return $query->whereIn($field, $value);
+                return $query->whereIn($field, $parsedValue);
             case 'not_in':
-                return $query->whereNotIn($field, $value);
+                return $query->whereNotIn($field, $parsedValue);
             case 'today':
                 return $query->whereDate($field, '=', Carbon::today());
             case 'yesterday':
@@ -81,44 +81,44 @@ class DateFilter extends AbstractFilter
                     Carbon::now()->subYear()->endOfYear()
                 ]);
             default:
-                return $query->whereDate($field, '=', $value);
+                return $query->whereDate($field, '=', $parsedValue);
         }
     }
 
 
     /**
      * Parse the date value, handling various formats.
-     *
+     * @param string $operator
      * @param mixed $value
-     * @return string|array|null
+     * @return string|array|boolean
      */
-    private function parseDateValue($value)
+    private function parseDateValue(string $operator, $value)
     {
         // Handle null values
-        if ($value === null) {
-            return null;
+        if ($value === null && !$this->isNullValidCase($operator)) {
+            return false;
         }
 
         // Handle array values (for between, in, etc.)
         if (is_array($value)) {
             $result = [];
             foreach ($value as $index => $item) {
-                $parsed = $this->parseSingleDate($item);
-                if ($parsed === null) {
+                $parsed = $this->parseSingleDate($operator, $item);
+                if (!$parsed) {
                     // For critical operations like between, we need both dates
                     // For in/not_in, we can filter out invalid dates
-                    if (count($value) <= 2) {
-                        return null;
+                    if (count($value) < 2) {
+                        return false;
                     }
                 } else {
                     $result[] = $parsed;
                 }
             }
-            return empty($result) ? null : $result;
+            return empty($result) ? false : $result;
         }
 
         // Handle single value
-        return $this->parseSingleDate($value);
+        return $this->parseSingleDate($operator, $value);
     }
 
     /**
@@ -127,7 +127,7 @@ class DateFilter extends AbstractFilter
      * @param mixed $value
      * @return string|null
      */
-    private function parseSingleDate($value)
+    private function parseSingleDate($operator, $value)
     {
         // Already a Carbon instance
         if ($value instanceof Carbon) {
@@ -135,8 +135,12 @@ class DateFilter extends AbstractFilter
         }
 
         // Empty values
-        if (empty($value) || $value === 'null') {
-            return null;
+        if ($this->isNullValidCase($operator)) {
+            return true;
+        }
+
+        if ((empty($value) || $value === 'null')) {
+            return false;
         }
 
         // Try to parse the date
@@ -170,8 +174,14 @@ class DateFilter extends AbstractFilter
             return Carbon::parse($value)->toDateString();
         } catch (\Exception $e) {
             // Any parsing error means the date is invalid
-            return null;
+            return false;
         }
+    }
+
+    public function isNullValidCase(string $operator)
+    {
+        $nullValidOperators = ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year', 'last_year'];
+        return in_array($operator, $nullValidOperators);
     }
 
     /**

@@ -127,6 +127,7 @@ abstract class FilterService implements FilterServiceInterface
                 throw InvalidFilterException::invalidFilter($filter['field'], $filter['operator']);
             }
             $fieldType = $this->allowedFilters[$filter['field']]['type'];
+            
             $this->driver->applyWhere($query, $fieldType, $filter['field'], $filter['operator'], $filter['value']);
         }
 
