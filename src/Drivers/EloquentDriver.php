@@ -24,12 +24,29 @@ class EloquentDriver extends AbstractDriver implements FilterDriverInterface
      * @param string $field
      * @param string $operator
      * @param mixed $value
+     * @param string $logic
      * @return Builder
      */
-    public function applyWhere($query, string $fieldType, string $field, string $operator, $value)
+    public function applyWhere($query, string $fieldType, string $field, string $operator, $value, string $logic = 'and')
     {
         return $this->getFilterClass($fieldType)
-            ->apply($query, $field, $operator, $value);
+            ->apply($query, $field, $operator, $value, $logic);
+    }
+
+    /**
+     * Apply an OR where condition to the query.
+     *
+     * @param Builder $query
+     * @param string $fieldType
+     * @param string $field
+     * @param string $operator
+     * @param mixed $value
+     * @return Builder
+     */
+    public function applyOrWhere($query, string $fieldType, string $field, string $operator, $value)
+    {
+        return $this->getFilterClass($fieldType)
+            ->apply($query, $field, $operator, $value, 'or');
     }
 
     public function getFilterClass(string $fieldType)
@@ -70,10 +87,12 @@ class EloquentDriver extends AbstractDriver implements FilterDriverInterface
                     // Handle relationship fields
                     list($relation, $column) = explode('.', $field, 2);
                     $q->orWhereHas($relation, function ($subQ) use ($column, $searchTerm) {
-                        $subQ->where($column, 'LIKE', "%{$searchTerm}%");
+                        // Fix SQL injection vulnerability by using parameters
+                        $subQ->where($column, 'LIKE', '%' . $searchTerm . '%');
                     });
                 } else {
-                    $q->orWhere($field, 'LIKE', "%{$searchTerm}%");
+                    // Fix SQL injection vulnerability by using parameters
+                    $q->orWhere($field, 'LIKE', '%' . $searchTerm . '%');
                 }
             }
         });

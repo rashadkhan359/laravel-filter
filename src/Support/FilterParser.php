@@ -7,123 +7,123 @@ use Illuminate\Http\Request;
 class FilterParser
 {
     /**
-     * Parse filter parameters from request.
+     * Parse filter parameters from a request.
      *
      * @param Request $request
      * @return array
      */
     public static function fromRequest(Request $request): array
     {
-        $filterParams = [];
+        $params = [];
 
-        // Process search parameter
+        // Parse search parameter
         if ($request->has('search')) {
-            $filterParams['search'] = $request->input('search');
+            $params['search'] = $request->input('search');
         }
 
-        // Process standard filters
-        if ($request->has('filter')) {
-            $filterParams['filters'] = self::parseFilterParameter($request->input('filter'));
+        // Parse filters
+        if ($request->has('filters')) {
+            $params['filters'] = self::parseFilters($request->input('filters'));
         }
 
-        // Process sorting
+        // Parse sort parameters
         if ($request->has('sort')) {
-            $filterParams['sort'] = self::parseSortParameter($request->input('sort'));
+            $params['sort'] = self::parseSort($request->input('sort'));
         }
 
-        // Process pagination
-        $filterParams['page'] = $request->input('page', 1);
-        $filterParams['per_page'] = $request->input('per_page', 15);
+        // Parse pagination
+        $params['per_page'] = $request->input('per_page', config('laravelfilter.default_per_page', 15));
+        $params['page'] = $request->input('page', 1);
 
-        return $filterParams;
+        return $params;
     }
 
     /**
-     * Parse filter parameter from various formats.
+     * Parse filters from various input formats.
      *
-     * @param mixed $filter
+     * @param mixed $filters
      * @return array
      */
-    protected static function parseFilterParameter($filter): array
+    public static function parseFilters($filters): array
     {
         // Handle JSON string
-        if (is_string($filter) && self::isJson($filter)) {
-            return json_decode($filter, true);
+        if (is_string($filters)) {
+            $filters = json_decode($filters, true);
         }
 
-        // Handle array
-        if (is_array($filter)) {
-            return $filter;
+        // Default to empty array if not valid
+        if (!is_array($filters)) {
+            return [
+                'logic' => 'and',
+                'conditions' => []
+            ];
         }
 
-        // Handle URL parameter style (field:operator:value,field2:operator2:value2)
-        if (is_string($filter)) {
-            $filters = [];
-            $filterParts = explode(',', $filter);
-
-            foreach ($filterParts as $part) {
-                $segments = explode(':', $part);
-
-                if (count($segments) >= 3) {
-                    $field = $segments[0];
-                    $operator = $segments[1];
-                    $value = $segments[2];
-
-                    // Handle special value types
-                    if ($value === 'null') {
-                        $value = null;
-                    } elseif ($value === 'true') {
-                        $value = true;
-                    } elseif ($value === 'false') {
-                        $value = false;
-                    } elseif (strpos($value, '|') !== false) {
-                        // Handle array values
-                        $value = explode('|', $value);
-                    }
-
-                    $filters[] = [
-                        'field' => $field,
-                        'operator' => $operator,
-                        'value' => $value,
-                    ];
-                }
-            }
-
+        // Check if this is a new format with logic and groups/conditions
+        if (isset($filters['logic'])) {
             return $filters;
         }
 
-        return [];
+        // Convert from various legacy formats to the new format
+
+        // Format: [{'field': 'name', 'operator': 'eq', 'value': 'John'}]
+        if (isset($filters[0]) && is_array($filters[0]) && isset($filters[0]['field'])) {
+            return [
+                'logic' => 'and',
+                'conditions' => $filters
+            ];
+        }
+
+        // Format: {'name': 'John', 'age': {'operator': 'gt', 'value': 18}}
+        $conditions = [];
+        foreach ($filters as $field => $value) {
+            if (is_array($value) && isset($value['operator'])) {
+                $conditions[] = [
+                    'field' => $field,
+                    'operator' => $value['operator'],
+                    'value' => $value['value']
+                ];
+            } else {
+                $conditions[] = [
+                    'field' => $field,
+                    'operator' => 'eq',
+                    'value' => $value
+                ];
+            }
+        }
+
+        return [
+            'logic' => 'and',
+            'conditions' => $conditions
+        ];
     }
 
     /**
-     * Parse sort parameter from various formats.
+     * Parse sort parameters from various formats.
      *
      * @param mixed $sort
      * @return array|string
      */
-    protected static function parseSortParameter($sort)
+    public static function parseSort($sort)
     {
         // Handle JSON string
         if (is_string($sort) && self::isJson($sort)) {
-            return json_decode($sort, true);
+            $sort = json_decode($sort, true);
         }
 
-        // Handle array
-        if (is_array($sort)) {
-            return $sort;
-        }
+        // Handle format like "-created_at" (for descending)
+        if (is_string($sort) && !str_contains($sort, ':')) {
+            $direction = 'asc';
 
-        // Handle string format (field:direction)
-        if (is_string($sort)) {
-            if (strpos($sort, ':') !== false) {
-                return $sort;
+            if (str_starts_with($sort, '-')) {
+                $direction = 'desc';
+                $sort = substr($sort, 1);
             }
 
-            // Default to ascending order if only field is provided
-            return $sort . ':asc';
+            return $sort . ':' . $direction;
         }
 
-        return [];
+        return $sort;
     }
 
     /**
@@ -132,9 +132,9 @@ class FilterParser
      * @param string $string
      * @return bool
      */
-    protected static function isJson($string): bool
+    private static function isJson(string $string): bool
     {
         json_decode($string);
-        return (json_last_error() == JSON_ERROR_NONE);
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }

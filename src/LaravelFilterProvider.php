@@ -3,6 +3,9 @@
 namespace RashadKhan\LaravelFilter;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Blade;
+use Livewire\Livewire;
+use RashadKhan\LaravelFilter\Livewire\FilterBuilder as LivewireFilterBuilder;
 use RashadKhan\LaravelFilter\Drivers\MongoDriver;
 use RashadKhan\LaravelFilter\Drivers\EloquentDriver;
 use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
@@ -10,7 +13,7 @@ use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 class LaravelFilterProvider extends ServiceProvider
 {
     /**
-     * Register services.
+     * Register any application services.
      *
      * @return void
      */
@@ -40,10 +43,15 @@ class LaravelFilterProvider extends ServiceProvider
             $defaultDriver = config('laravelfilter.default_driver');
             return $app->make("laravelfilter.driver.{$defaultDriver}");
         });
+
+        // Register the FilterService binding
+        $this->app->bind('filter', function ($app) {
+            return new FilterManager();
+        });
     }
 
     /**
-     * Bootstrap services.
+     * Bootstrap any application services.
      *
      * @return void
      */
@@ -66,6 +74,31 @@ class LaravelFilterProvider extends ServiceProvider
             $this->commands([
                 \RashadKhan\LaravelFilter\Console\Commands\MakeFilterCommand::class,
             ]);
+        }
+
+        // Views publishing
+        $this->publishes([
+            __DIR__.'/../resources/views' => resource_path('views/vendor/laravel-filter'),
+        ], 'views');
+
+        // Assets publishing
+        $this->publishes([
+            __DIR__.'/../resources/js' => resource_path('js/vendor/laravel-filter'),
+        ], 'assets');
+
+        // Load views
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'laravel-filter');
+
+        // Register Livewire components if Livewire is installed
+        if (class_exists(Livewire::class)) {
+            Livewire::component('filter-builder', LivewireFilterBuilder::class);
+        }
+
+        // Register Alpine directive if Alpine.js is being used
+        if (class_exists(Blade::class)) {
+            Blade::directive('filterScripts', function () {
+                return "<?php echo '<script src=\"'.asset('vendor/laravel-filter/alpine/filter-builder.js').'\"></script>'; ?>";
+            });
         }
     }
 }

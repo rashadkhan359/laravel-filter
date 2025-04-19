@@ -1,33 +1,44 @@
 # Laravel Filter
 
-A powerful, flexible, and database-agnostic query filtering package for Laravel applications.
+A powerful, flexible filtering solution for Laravel applications that works with any database type and integrates with all major frontend frameworks.
 
 ## Features
 
-- **Universal Adaptability:** Support for any data source (SQL, NoSQL, API)
-- **Intuitive API:** Simple to use, with minimal boilerplate
-- **Progressive Enhancement:** Easy for simple cases, powerful for complex ones
-- **Multiple Database Support:** Works with MySQL, PostgreSQL, SQLite, and MongoDB
-- **Modern API Integration:** First-class support for Laravel API resources
-- **SPA-Friendly:** Dynamic front-end filtering capabilities
-- **Advanced Filtering:** Complex conditions, nested relationships, and more
-- **Performance Optimized:** Efficient query building and caching
+- **Universal Database Support**: Works with Eloquent, MongoDB, and other databases
+- **Frontend Framework Integration**: React, Vue, Livewire, and Alpine.js components included
+- **Advanced Filtering**: Text search, numeric range, date filtering, boolean filters, relationship filters
+- **Extensible Architecture**: Easily add custom filter types and database drivers
+- **AND/OR Logic Support**: Combine filters with different logic operators
+- **Performance Optimized**: Lazy-loaded queries for better performance
+- **User-Friendly UI**: Beautiful, responsive UI components with customizable themes
 
 ## Installation
 
 ```bash
-composer require RashadKhan/laravel-filter
+composer require rashadkhan/laravel-filter
 ```
 
-Publish the configuration:
+Publish the configuration file:
 
 ```bash
-php artisan vendor:publish --provider="RashadKhan\LaravelFilter\QueryFilterServiceProvider"
+php artisan vendor:publish --provider="RashadKhan\LaravelFilter\LaravelFilterProvider" --tag="config"
+```
+
+If you want to customize the views:
+
+```bash
+php artisan vendor:publish --provider="RashadKhan\LaravelFilter\LaravelFilterProvider" --tag="views"
+```
+
+For the JavaScript assets:
+
+```bash
+php artisan vendor:publish --provider="RashadKhan\LaravelFilter\LaravelFilterProvider" --tag="assets"
 ```
 
 ## Basic Usage
 
-### 1. Add Filterable Trait to Your Model
+### Configure Your Model
 
 ```php
 <?php
@@ -37,24 +48,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use RashadKhan\LaravelFilter\Traits\Filterable;
 
-class Product extends Model
+class User extends Model
 {
     use Filterable;
 
-    // Optionally specify a custom filter service class
-    protected $filterServiceClass = \App\Filters\ProductFilter::class;
+    // Define the filter service class for this model
+    public function getFilterServiceClass()
+    {
+        return \App\Filters\UserFilter::class;
+    }
 }
 ```
 
-### 2. Create a Filter Class
-
-Generate a filter class automatically:
-
-```bash
-php artisan make:filter Product
-```
-
-Or manually create one:
+### Create a Filter Service
 
 ```php
 <?php
@@ -63,166 +69,298 @@ namespace App\Filters;
 
 use RashadKhan\LaravelFilter\FilterService;
 
-class ProductFilter extends FilterService
+class UserFilter extends FilterService
 {
     protected $allowedFilters = [
-        'id' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'between'],
-        'name' => ['eq', 'neq', 'like'],
-        'price' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
-        'category_id' => ['eq', 'neq', 'in'],
-        'created_at' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
+        'name' => [
+            'type' => 'text',
+            'operators' => ['eq', 'contains', 'starts_with', 'ends_with']
+        ],
+        'email' => [
+            'type' => 'text',
+            'operators' => ['eq', 'contains']
+        ],
+        'age' => [
+            'type' => 'number',
+            'operators' => ['eq', 'gt', 'lt', 'between']
+        ],
+        'created_at' => [
+            'type' => 'date',
+            'operators' => ['eq', 'gt', 'lt', 'between']
+        ],
+        'active' => [
+            'type' => 'boolean',
+            'operators' => ['eq']
+        ],
     ];
 
-    protected $searchableFields = [
-        'name',
-        'description',
-        'sku'
-    ];
+    protected $searchableFields = ['name', 'email'];
 }
 ```
 
-### 3. Use in Controller
+### Use in Controller
 
 ```php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Models\Product;
-use Illuminate\Http\Request;
-use RashadKhan\LaravelFilter\Traits\HandlesApiRequests;
-
-class ProductController extends Controller
+public function index(Request $request)
 {
-    use HandlesApiRequests;
+    $users = User::filter($request->all());
 
-    public function index(Request $request)
+    return response()->json([
+        'data' => $users->items(),
+        'meta' => [
+            'current_page' => $users->currentPage(),
+            'from' => $users->firstItem(),
+            'last_page' => $users->lastPage(),
+            'per_page' => $users->perPage(),
+            'to' => $users->lastItem(),
+            'total' => $users->total(),
+        ]
+    ]);
+}
+```
+
+### Frontend Integration
+
+#### Using with React
+
+```jsx
+import { FilterBuilder } from 'laravel-filter/react';
+
+function UsersTable() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fields = [
+    { name: 'name', label: 'Name', type: 'text' },
+    { name: 'email', label: 'Email', type: 'text' },
+    { name: 'age', label: 'Age', type: 'number' },
+    { name: 'created_at', label: 'Created At', type: 'date' },
+    { name: 'active', label: 'Active', type: 'boolean' }
+  ];
+
+  const handleFilterChange = (filterData) => {
+    setLoading(true);
+
+    axios.get('/api/users', { params: filterData })
+      .then(response => {
+        setUsers(response.data.data);
+        setLoading(false);
+      });
+  };
+
+  return (
+    <div>
+      <FilterBuilder
+        fields={fields}
+        onFilterChange={handleFilterChange}
+        theme="light"
+      />
+
+      {/* Your table component */}
+    </div>
+  );
+}
+```
+
+#### Using with Vue
+
+```vue
+<template>
+  <div>
+    <filter-builder
+      :fields="fields"
+      @filter-change="handleFilterChange"
+      theme="light"
+    />
+
+    <!-- Your table component -->
+  </div>
+</template>
+
+<script>
+import { FilterBuilder } from 'laravel-filter/vue';
+
+export default {
+  components: {
+    FilterBuilder
+  },
+
+  data() {
+    return {
+      users: [],
+      loading: false,
+      fields: [
+        { name: 'name', label: 'Name', type: 'text' },
+        { name: 'email', label: 'Email', type: 'text' },
+        { name: 'age', label: 'Age', type: 'number' },
+        { name: 'created_at', label: 'Created At', type: 'date' },
+        { name: 'active', label: 'Active', type: 'boolean' }
+      ]
+    };
+  },
+
+  methods: {
+    handleFilterChange(filterData) {
+      this.loading = true;
+
+      axios.get('/api/users', { params: filterData })
+        .then(response => {
+          this.users = response.data.data;
+          this.loading = false;
+        });
+    }
+  }
+};
+</script>
+```
+
+#### Using with Livewire
+
+```php
+use Livewire\Component;
+
+class UsersTable extends Component
+{
+    public $users = [];
+
+    protected $listeners = ['filterChanged' => 'applyFilter'];
+
+    public function mount()
     {
-        return $this->filteredIndex($request, Product::class, \App\Http\Resources\ProductResource::class);
+        $this->users = User::paginate(15);
+    }
+
+    public function applyFilter($filterData)
+    {
+        $this->users = User::filter($filterData)->get();
+    }
+
+    public function render()
+    {
+        $fields = [
+            ['name' => 'name', 'label' => 'Name', 'type' => 'text'],
+            ['name' => 'email', 'label' => 'Email', 'type' => 'text'],
+            ['name' => 'age', 'label' => 'Age', 'type' => 'number'],
+            ['name' => 'created_at', 'label' => 'Created At', 'type' => 'date'],
+            ['name' => 'active', 'label' => 'Active', 'type' => 'boolean']
+        ];
+
+        return view('livewire.users-table', [
+            'users' => $this->users,
+            'fields' => $fields
+        ]);
     }
 }
 ```
 
-### 4. Make API Requests
+```blade
+<div>
+    @livewire('filter-builder', ['fields' => $fields])
 
-```http
-GET /api/products?search=wireless&filter[price][operator]=gt&filter[price][value]=100&sort=price:desc
+    <!-- Your table component -->
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Age</th>
+                <th>Created At</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($users as $user)
+                <tr>
+                    <td>{{ $user->name }}</td>
+                    <td>{{ $user->email }}</td>
+                    <td>{{ $user->age }}</td>
+                    <td>{{ $user->created_at->format('Y-m-d') }}</td>
+                    <td>{{ $user->active ? 'Active' : 'Inactive' }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+```
+
+#### Using with Alpine.js
+
+```blade
+@push('scripts')
+    @filterScripts
+@endpush
+
+<div x-data="filterBuilder(@js($fields), {
+    onFilterChange: function(filterData) {
+        // Fetch data using AJAX
+        fetch('/api/users?' + new URLSearchParams(filterData))
+            .then(response => response.json())
+            .then(data => {
+                // Update your table data
+            });
+    }
+})">
+    <!-- The filter UI is included in the Alpine component -->
+
+    <!-- Your table component -->
+</div>
 ```
 
 ## Advanced Usage
 
-### Custom Filters
-
-You can customize the filter application by overriding methods in your filter class:
+### Creating Custom Filters
 
 ```php
 <?php
 
 namespace App\Filters;
 
-use RashadKhan\LaravelFilter\FilterService;
-use Illuminate\Database\Eloquent\Builder;
+use RashadKhan\LaravelFilter\Filters\AbstractFilter;
 
-class ProductFilter extends FilterService
+class CustomJsonFilter extends AbstractFilter
 {
-    public function applyCustomFilters(Builder $query): Builder
+    public static function jsonContains(string $field, string $key, $value): array
     {
-        if ($this->hasFilter('custom_condition')) {
-            $query->where('custom_field', $this->getFilterValue('custom_condition'));
+        return self::conditions($field, 'json_contains', [
+            'key' => $key,
+            'value' => $value
+        ]);
+    }
+
+    protected function applyJsonContains($query, string $field, $value, string $whereMethod)
+    {
+        $key = $value['key'] ?? null;
+        $searchValue = $value['value'] ?? null;
+
+        if ($whereMethod === 'orWhere') {
+            return $query->orWhereJsonContains($field . '->' . $key, $searchValue);
         }
-        return $query;
+
+        return $query->whereJsonContains($field . '->' . $key, $searchValue);
     }
 }
 ```
 
----
+### Creating Custom Drivers
 
-# Contributing to Laravel Filter
+```php
+<?php
 
-We welcome contributions to Laravel Filter! 🎉
+namespace App\Drivers;
 
-## How to Contribute
+use RashadKhan\LaravelFilter\Drivers\AbstractDriver;
+use RashadKhan\LaravelFilter\Contracts\FilterDriverInterface;
 
-1. **Fork the Repository**: Click the "Fork" button at the top-right of the repository.
-2. **Clone Your Fork**:
-   ```bash
-   git clone https://github.com/RashadKhan/laravel-filter.git
-   cd laravel-filter
-   ```
-3. **Create a New Branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-4. **Make Changes & Commit**:
-   - Follow the coding standards (PSR-4).
-   - Run tests before submitting (`php artisan test`).
-   - Write meaningful commit messages.
+class CustomDriver extends AbstractDriver implements FilterDriverInterface
+{
+    // Implement the required interface methods
+}
+```
 
-   ```bash
-   git commit -m "Add feature: description"
-   ```
+## Contributing
 
-5. **Push to Your Fork & Create a Pull Request**:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-   Then, create a Pull Request (PR) from GitHub.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Code of Conduct
-
-By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Reporting Issues
-
-- If you find a bug, [open an issue](https://github.com/RashadKhan/laravel-filter/issues) with a detailed description.
-- Suggest improvements by opening a feature request issue.
-
----
-
-# Security Policy
-
-## Reporting a Vulnerability
-
-If you discover a security vulnerability in Laravel Filter, please report it confidentially.
-
-- **Email:** RashadKhan@gmail.com
-- **GitHub Issues:** Do NOT use issues for security reports.
-
-We will acknowledge your report within 48 hours and work on a fix promptly.
-
----
-
-# Changelog
-
-## [1.1.0] - 2025-03-14
-### Added
-- Support for complex nested filtering.
-- Improved performance for large datasets.
-
-## [1.0.0] - 2025-02-28
-### Initial Release
-- Core filtering functionality.
-- Supports MySQL, PostgreSQL, SQLite, MongoDB.
-
----
-
-# Funding
-
-If you want to support the project, consider sponsoring us:
-
-```yml
-.github/FUNDING.yml
-```
-
-```yml
-github: RashadKhan
-# patreon: yourpatreonusername
-```
-
----
-
-Enjoy using **Laravel Filter** to simplify and optimize your query filtering needs!
+The MIT License (MIT). Please see [License File](LICENSE) for more information.

@@ -5,62 +5,105 @@ namespace RashadKhan\LaravelFilter\Support;
 class FilterCollection
 {
     /**
-     * The filters array.
+     * The collection of filters.
      *
      * @var array
      */
     protected $filters = [];
 
     /**
+     * The logic operator (AND/OR) for combining filters.
+     *
+     * @var string
+     */
+    protected $logic = 'and';
+
+    /**
      * Create a new filter collection instance.
      *
      * @param array $filters
+     * @param string $logic
      */
-    public function __construct(array $filters = [])
+    public function __construct(array $filters, string $logic = 'and')
     {
+        $this->logic = strtolower($logic);
         $this->parseFilters($filters);
     }
 
     /**
-     * Parse the filters.
+     * Parse the filters from the input array.
      *
      * @param array $filters
      * @return void
      */
-    protected function parseFilters(array $filters): void
+    protected function parseFilters(array $filters)
     {
-        foreach ($filters as $key => $value) {
-            // Handle associative array format (field => value)
-            if (is_string($key) && !is_array($value)) {
+        // Handle nested filter groups
+        if (isset($filters['groups']) && is_array($filters['groups'])) {
+            foreach ($filters['groups'] as $group) {
                 $this->filters[] = [
-                    'field' => $key,
-                    'operator' => 'eq',
-                    'value' => $value
+                    'type' => 'group',
+                    'logic' => $group['logic'] ?? 'and',
+                    'filters' => new self($group['filters'], $group['logic'] ?? 'and')
                 ];
             }
-            // Handle nested array format with operator
-            elseif (is_string($key) && is_array($value) && isset($value['operator'])) {
-                $this->filters[] = [
-                    'field' => $key,
-                    'operator' => $value['operator'],
-                    'value' => $value['value'] ?? null
-                ];
+        }
+
+        // Handle flat filter list
+        if (isset($filters['conditions']) && is_array($filters['conditions'])) {
+            foreach ($filters['conditions'] as $filter) {
+                if (isset($filter['field'], $filter['operator'], $filter['value'])) {
+                    $this->filters[] = [
+                        'type' => 'condition',
+                        'field' => $filter['field'],
+                        'operator' => $filter['operator'],
+                        'value' => $filter['value']
+                    ];
+                }
             }
-            // Handle pre-formatted filter array
-            elseif (is_array($value) && isset($value['field']) && isset($value['operator'])) {
-                $this->filters[] = $value;
+        } else if (!isset($filters['groups'])) {
+            // Legacy format support - each filter is a direct array
+            foreach ($filters as $filter) {
+                if (isset($filter['field'], $filter['operator'], $filter['value'])) {
+                    $this->filters[] = [
+                        'type' => 'condition',
+                        'field' => $filter['field'],
+                        'operator' => $filter['operator'],
+                        'value' => $filter['value']
+                    ];
+                }
             }
         }
     }
 
     /**
-     * Get all filters.
+     * Get the filters.
      *
      * @return array
      */
     public function getFilters(): array
     {
         return $this->filters;
+    }
+
+    /**
+     * Get the logic operator.
+     *
+     * @return string
+     */
+    public function getLogic(): string
+    {
+        return $this->logic;
+    }
+
+    /**
+     * Check if the collection has any filters.
+     *
+     * @return bool
+     */
+    public function hasFilters(): bool
+    {
+        return !empty($this->filters);
     }
 
     /**
@@ -88,16 +131,6 @@ class FilterCollection
         });
 
         return $this;
-    }
-
-    /**
-     * Check if collection has filters.
-     *
-     * @return bool
-     */
-    public function hasFilters(): bool
-    {
-        return !empty($this->filters);
     }
 
     /**

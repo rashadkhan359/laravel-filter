@@ -120,18 +120,60 @@ abstract class FilterService implements FilterServiceInterface
      */
     protected function applyFilters($query, array $filters)
     {
-        $filterCollection = new FilterCollection($filters);
+        $logic = $filters['logic'] ?? 'and';
+        $filterCollection = new FilterCollection($filters, $logic);
 
-        foreach ($filterCollection->getFilters() as $filter) {
-            if (!$this->isValidFilter(filter: $filter)) {
-                throw InvalidFilterException::invalidFilter($filter['field'], $filter['operator']);
-            }
-            $fieldType = $this->allowedFilters[$filter['field']]['type'];
-            
-            $this->driver->applyWhere($query, $fieldType, $filter['field'], $filter['operator'], $filter['value']);
+        if (!$filterCollection->hasFilters()) {
+            return $query;
         }
 
-        return $query;
+        // Process logic type (AND/OR)
+        $whereMethod = strtolower($logic) === 'or' ? 'orWhere' : 'where';
+
+        return $query->$whereMethod(function ($q) use ($filterCollection) {
+            $this->processFilterCollection($q, $filterCollection);
+        });
+    }
+
+    /**
+     * Process a filter collection and apply it to the query.
+     *
+     * @param mixed $query
+     * @param FilterCollection $filterCollection
+     * @return void
+     * @throws InvalidFilterException
+     */
+    protected function processFilterCollection($query, FilterCollection $filterCollection)
+    {
+        $logic = $filterCollection->getLogic();
+        $filters = $filterCollection->getFilters();
+
+        foreach ($filters as $filter) {
+            if ($filter['type'] === 'group') {
+                // Process nested filter group using recursive call
+                $whereMethod = strtolower($filter['logic']) === 'or' ? 'orWhere' : 'where';
+                $query->$whereMethod(function ($q) use ($filter) {
+                    $this->processFilterCollection($q, $filter['filters']);
+                });
+            } else {
+                // Process individual condition
+                if (!$this->isValidFilter($filter)) {
+                    throw InvalidFilterException::invalidFilter($filter['field'], $filter['operator']);
+                }
+
+                $fieldType = $this->allowedFilters[$filter['field']]['type'];
+                $whereMethod = strtolower($logic) === 'or' ? 'orWhere' : 'where';
+
+                // Use dynamic method name based on logic
+                if (method_exists($this->driver, 'apply' . ucfirst($whereMethod))) {
+                    $method = 'apply' . ucfirst($whereMethod);
+                    $this->driver->$method($query, $fieldType, $filter['field'], $filter['operator'], $filter['value']);
+                } else {
+                    // Fallback to standard applyWhere with logic context
+                    $this->driver->applyWhere($query, $fieldType, $filter['field'], $filter['operator'], $filter['value'], $logic);
+                }
+            }
+        }
     }
 
     /**
@@ -142,6 +184,10 @@ abstract class FilterService implements FilterServiceInterface
      */
     protected function isValidFilter(array $filter): bool
     {
+        if ($filter['type'] === 'group') {
+            return true;
+        }
+
         return isset($this->allowedFilters[$filter['field']]['operators']) &&
             in_array($filter['operator'], $this->allowedFilters[$filter['field']]['operators']);
     }
